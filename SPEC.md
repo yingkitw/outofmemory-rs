@@ -37,7 +37,7 @@ would have returned:
 | --- | --- | --- |
 | `BadRequest` | 400 | missing required field, invalid reference, type mismatch on link endpoints, `pattern`/`enumValues` violation |
 | `NotFound` | 404 | update/delete of a missing entity |
-| `Conflict` | 409 | duplicate apiName, duplicate `(linkType, source, target)` link, `unique` violation |
+| `Conflict` | 409 | duplicate apiName, duplicate `(linkType, source, target)` link, `unique` violation, `ONE`-cardinality link already exists |
 
 ## Store semantics (`store.rs`)
 
@@ -54,6 +54,13 @@ rules are reported non-fatally by `Store::problems()` (also the backend of
 `outofmemory validate`). Constraints serialize on RDF property nodes as
 `onto:pattern`, `onto:enumValues`, `onto:unique` and round-trip losslessly.
 They do not apply to action parameters.
+
+Link cardinality `[ext]` — `create_object_link` enforces `ONE` ends: with
+`targetCardinality: ONE` a source object may have at most one link of the
+type (`MANY:ONE` = "many sources may point at one target"); with
+`sourceCardinality: ONE` a target may receive from at most one source.
+Violations return `Conflict`. Imports bypass this; `Store::problems()`
+reports over-capacity groups non-fatally.
 
 Cascades (the DB's `ON DELETE CASCADE` rules):
 

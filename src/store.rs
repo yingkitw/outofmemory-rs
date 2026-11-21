@@ -446,6 +446,40 @@ impl Store {
                 problems.push(format!("object {}: {msg}", o.id));
             }
         }
+        // cardinality violations — imports bypass write-time checks
+        let mut src_counts: std::collections::HashMap<(&str, &str), usize> =
+            std::collections::HashMap::new();
+        let mut tgt_counts: std::collections::HashMap<(&str, &str), usize> =
+            std::collections::HashMap::new();
+        for l in &self.state.object_links {
+            let Some(lt) = self.link_type(&l.link_type_id) else {
+                continue;
+            };
+            if lt.target_cardinality == Cardinality::One {
+                let c = src_counts
+                    .entry((&l.link_type_id, &l.source_object_id))
+                    .or_default();
+                *c += 1;
+                if *c == 2 {
+                    problems.push(format!(
+                        "link type {} allows only ONE target per source object (object {})",
+                        lt.api_name, l.source_object_id
+                    ));
+                }
+            }
+            if lt.source_cardinality == Cardinality::One {
+                let c = tgt_counts
+                    .entry((&l.link_type_id, &l.target_object_id))
+                    .or_default();
+                *c += 1;
+                if *c == 2 {
+                    problems.push(format!(
+                        "link type {} allows only ONE source per target object (object {})",
+                        lt.api_name, l.target_object_id
+                    ));
+                }
+            }
+        }
         problems
     }
 
@@ -514,6 +548,28 @@ impl Store {
                 && x.target_object_id == l.target_object_id
         }) {
             return Err(Error::clash("this link already exists"));
+        }
+        // `MANY:ONE` = many sources → one target: a ONE end caps the links
+        // on that side (e.g. a second CURRENT_PORT for one vessel).
+        if lt.target_cardinality == Cardinality::One
+            && self.state.object_links.iter().any(|x| {
+                x.link_type_id == l.link_type_id && x.source_object_id == l.source_object_id
+            })
+        {
+            return Err(Error::clash(format!(
+                "link type {} allows only ONE target per source object",
+                lt.api_name
+            )));
+        }
+        if lt.source_cardinality == Cardinality::One
+            && self.state.object_links.iter().any(|x| {
+                x.link_type_id == l.link_type_id && x.target_object_id == l.target_object_id
+            })
+        {
+            return Err(Error::clash(format!(
+                "link type {} allows only ONE source per target object",
+                lt.api_name
+            )));
         }
         if l.id.is_empty() {
             l.id = uuid::Uuid::new_v4().to_string();
@@ -819,8 +875,8 @@ mod tests {
                 description: String::new(),
                 source_type_id: a.clone(),
                 target_type_id: b.clone(),
-                source_cardinality: Cardinality::One,
-                target_cardinality: Cardinality::One,
+                source_cardinality: Cardinality::Many,
+                target_cardinality: Cardinality::Many,
             })
             .unwrap()
             .id

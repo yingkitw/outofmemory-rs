@@ -304,6 +304,223 @@ fn property_constraints_round_trip() {
     check(parse_native(&to_native_json(&store)).unwrap());
 }
 
+// ---------- link cardinality ----------
+
+#[test]
+fn link_cardinality_enforced() {
+    let mut store = Store::new();
+    let mk_type = |api: &str| ObjectType {
+        id: String::new(),
+        api_name: api.into(),
+        display_name: api.into(),
+        plural_display_name: String::new(),
+        description: String::new(),
+        domain: String::new(),
+        color: String::new(),
+        properties: vec![],
+    };
+    let v = store
+        .create_object_type(mk_type("Vessel"))
+        .unwrap()
+        .id
+        .clone();
+    let p = store
+        .create_object_type(mk_type("Port"))
+        .unwrap()
+        .id
+        .clone();
+
+    // CURRENT_PORT: many vessels may share a port; a vessel has one port
+    let lt = store
+        .create_link_type(LinkType {
+            id: String::new(),
+            api_name: "CURRENT_PORT".into(),
+            display_name: "Current Port".into(),
+            description: String::new(),
+            source_type_id: v.clone(),
+            target_type_id: p.clone(),
+            source_cardinality: Cardinality::Many,
+            target_cardinality: Cardinality::One,
+        })
+        .unwrap()
+        .id
+        .clone();
+
+    let mk_obj = |id: &str, ty: &str| Obj {
+        id: id.into(),
+        type_id: ty.into(),
+        title: id.into(),
+        properties: Default::default(),
+        created_at: String::new(),
+    };
+    let v1 = store.create_object(mk_obj("v1", &v)).unwrap().id.clone();
+    let v2 = store.create_object(mk_obj("v2", &v)).unwrap().id.clone();
+    let p1 = store.create_object(mk_obj("p1", &p)).unwrap().id.clone();
+    let p2 = store.create_object(mk_obj("p2", &p)).unwrap().id.clone();
+
+    let mk_link = |src: &str, tgt: &str| ObjectLink {
+        id: String::new(),
+        link_type_id: lt.clone(),
+        source_object_id: src.into(),
+        target_object_id: tgt.into(),
+    };
+
+    store.create_object_link(mk_link(&v1, &p1)).unwrap();
+    // second target for the same source → 409 (targetCardinality ONE)
+    assert_eq!(
+        store
+            .create_object_link(mk_link(&v1, &p2))
+            .unwrap_err()
+            .kind,
+        ErrorKind::Conflict
+    );
+    // a different source to the same target is fine (sourceCardinality MANY)
+    store.create_object_link(mk_link(&v2, &p1)).unwrap();
+}
+
+#[test]
+fn link_cardinality_source_side() {
+    let mut store = Store::new();
+    let mk_type = |api: &str| ObjectType {
+        id: String::new(),
+        api_name: api.into(),
+        display_name: api.into(),
+        plural_display_name: String::new(),
+        description: String::new(),
+        domain: String::new(),
+        color: String::new(),
+        properties: vec![],
+    };
+    let v = store
+        .create_object_type(mk_type("Vessel"))
+        .unwrap()
+        .id
+        .clone();
+    // HOME_PORT: each port hosts at most one vessel (source side ONE)
+    let p = store
+        .create_object_type(mk_type("Port"))
+        .unwrap()
+        .id
+        .clone();
+    let lt = store
+        .create_link_type(LinkType {
+            id: String::new(),
+            api_name: "DOCKED_AT".into(),
+            display_name: "Docked At".into(),
+            description: String::new(),
+            source_type_id: v.clone(),
+            target_type_id: p.clone(),
+            source_cardinality: Cardinality::One,
+            target_cardinality: Cardinality::Many,
+        })
+        .unwrap()
+        .id
+        .clone();
+    let mk_obj = |id: &str, ty: &str| Obj {
+        id: id.into(),
+        type_id: ty.into(),
+        title: id.into(),
+        properties: Default::default(),
+        created_at: String::new(),
+    };
+    let v1 = store.create_object(mk_obj("v1", &v)).unwrap().id.clone();
+    let v2 = store.create_object(mk_obj("v2", &v)).unwrap().id.clone();
+    let p1 = store.create_object(mk_obj("p1", &p)).unwrap().id.clone();
+    let mk_link = |src: &str, tgt: &str| ObjectLink {
+        id: String::new(),
+        link_type_id: lt.clone(),
+        source_object_id: src.into(),
+        target_object_id: tgt.into(),
+    };
+    store.create_object_link(mk_link(&v1, &p1)).unwrap();
+    // second source for the same target → 409 (sourceCardinality ONE)
+    assert_eq!(
+        store
+            .create_object_link(mk_link(&v2, &p1))
+            .unwrap_err()
+            .kind,
+        ErrorKind::Conflict
+    );
+}
+
+#[test]
+fn problems_reports_cardinality_violations() {
+    let mut store = Store::new();
+    let mk_type = |api: &str| ObjectType {
+        id: String::new(),
+        api_name: api.into(),
+        display_name: api.into(),
+        plural_display_name: String::new(),
+        description: String::new(),
+        domain: String::new(),
+        color: String::new(),
+        properties: vec![],
+    };
+    let v = store
+        .create_object_type(mk_type("Vessel"))
+        .unwrap()
+        .id
+        .clone();
+    let p = store
+        .create_object_type(mk_type("Port"))
+        .unwrap()
+        .id
+        .clone();
+    let lt = store
+        .create_link_type(LinkType {
+            id: String::new(),
+            api_name: "CURRENT_PORT".into(),
+            display_name: "Current Port".into(),
+            description: String::new(),
+            source_type_id: v.clone(),
+            target_type_id: p.clone(),
+            source_cardinality: Cardinality::Many,
+            target_cardinality: Cardinality::One,
+        })
+        .unwrap()
+        .id
+        .clone();
+    let mk_obj = |id: &str, ty: &str| Obj {
+        id: id.into(),
+        type_id: ty.into(),
+        title: id.into(),
+        properties: Default::default(),
+        created_at: String::new(),
+    };
+    let v1 = store.create_object(mk_obj("v1", &v)).unwrap().id.clone();
+    let p1 = store.create_object(mk_obj("p1", &p)).unwrap().id.clone();
+    let p2 = store.create_object(mk_obj("p2", &p)).unwrap().id.clone();
+    // imports bypass write-time checks — lint reports the violation
+    store.import(
+        State {
+            object_links: vec![
+                ObjectLink {
+                    id: "l1".into(),
+                    link_type_id: lt.clone(),
+                    source_object_id: v1.clone(),
+                    target_object_id: p1.clone(),
+                },
+                ObjectLink {
+                    id: "l2".into(),
+                    link_type_id: lt.clone(),
+                    source_object_id: v1.clone(),
+                    target_object_id: p2.clone(),
+                },
+            ],
+            ..Default::default()
+        },
+        ImportMode::Merge,
+    );
+    assert!(
+        store
+            .problems()
+            .iter()
+            .any(|p| p.contains("ONE target per source")),
+        "{:?}",
+        store.problems()
+    );
+}
+
 // ---------- context engineering ----------
 
 #[test]
