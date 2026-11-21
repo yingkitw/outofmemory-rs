@@ -4,12 +4,13 @@
 //! |---|---|---|
 //! | native `outofmemory` JSON | [`to_native_json`] | [`parse_native`] |
 //! | JSON-LD | [`to_json_ld`] | [`parse_json_ld`] |
-//! | Turtle | [`to_turtle`] | — |
+//! | Turtle | [`to_turtle`] | [`parse_turtle`] |
 //! | OWL (RDF/XML) | [`to_owl_rdf`] | [`parse_owl_rdf`] |
 //! | instances CSV | [`to_instances_csv`] | — |
 //!
-//! The native → JSON-LD → native and native → OWL → native chains are
-//! lossless, which the integration tests verify.
+//! The native → JSON-LD → native, native → OWL → native and
+//! native → Turtle → native chains are lossless, which the integration
+//! tests verify.
 
 mod csv;
 mod jsonld;
@@ -19,7 +20,7 @@ mod turtle;
 pub use csv::to_instances_csv;
 pub use jsonld::{parse_json_ld, to_json_ld};
 pub use owl::{parse_owl_rdf, to_owl_rdf};
-pub use turtle::to_turtle;
+pub use turtle::{parse_turtle, to_turtle};
 
 use serde::Serialize;
 
@@ -179,9 +180,10 @@ pub fn import(
             parse_json_ld(&doc)
         }
         Format::Owl => parse_owl_rdf(payload)?,
-        Format::Turtle | Format::Csv => {
+        Format::Turtle => parse_turtle(payload)?,
+        Format::Csv => {
             return Err(Error::bad(
-                "format must be 'outofmemory', 'jsonld' or 'owl'",
+                "format must be 'outofmemory', 'jsonld', 'owl' or 'turtle'",
             ));
         }
     };

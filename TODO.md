@@ -13,10 +13,10 @@
 - [x] Deterministic supply-chain seed
 - [x] CLI: seed/export/import/validate/context/mcp
 - [x] Integration tests + example; `cargo test`/`clippy` green
+- [x] Turtle import (`parse_turtle`) — Turtle round-trip is lossless (export carries the full `onto:` annotation set)
 
 ## Next
 
-- [ ] Turtle import (`parse_turtle`) — completes the format table (TS has none either)
 - [ ] Property-level constraints (regex/enum/uniqueness) with instance validation — from the workbench roadmap
 - [ ] Link cardinality enforcement at instance-link write time (e.g. reject a second `CURRENT_PORT` for a vessel)
 - [ ] Undo/redo stack over `State` snapshots (`put_state` already backs it)

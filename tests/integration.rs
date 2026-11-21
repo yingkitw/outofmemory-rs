@@ -67,12 +67,30 @@ fn owl_round_trip() {
 }
 
 #[test]
-fn turtle_and_csv_exports() {
+fn turtle_round_trip() {
     let store = seeded();
     let ttl = to_turtle(&store);
     assert!(ttl.contains("onto:Shipment a rdfs:Class"));
     assert!(ttl.contains("onto:CARRIED_BY a rdf:Property"));
+    assert!(ttl.contains("onto:DELAY_SHIPMENT a onto:Action"));
+    let parsed = parse_turtle(&ttl).unwrap();
+    assert!(
+        parsed.warnings.is_empty(),
+        "warnings: {:?}",
+        parsed.warnings
+    );
+    let mut fresh = Store::new();
+    fresh.import(parsed.state, ImportMode::Replace);
+    assert_eq!(
+        serde_json::to_value(&fresh.state).unwrap(),
+        serde_json::to_value(&store.state).unwrap(),
+        "Turtle round-trip must be lossless"
+    );
+}
 
+#[test]
+fn csv_export() {
+    let store = seeded();
     let csv = to_instances_csv(&store);
     let lines: Vec<&str> = csv.lines().collect();
     assert_eq!(lines.len(), store.state.objects.len() + 1); // header + rows

@@ -72,7 +72,13 @@ payloads link to TitleCase seeded types (the TS merge leaves those dangling).
   action type, `onto:{Type}` nodes per instance, `onto:{LinkType}` nodes per
   instance link. `local()` strips `https?://(outofmemory|ontic).local/onto/`
   only; `onto:`/`rdfs:`/`rdf:` terms pass through.
-- **Turtle** — same model as `.ttl` triples. Export only.
+- **Turtle** — same model as `.ttl` triples; carries the same `onto:*`
+  annotations as JSON-LD (including `onto:Action` with `[ … ]` blank-node
+  parameters and `onto:linkId`/`onto:objectId`/`onto:createdAt`). Import is a
+  hand-rolled Turtle-subset parser: `@prefix`/`PREFIX`/`BASE`, `a`, `;`/`,`
+  lists, `<iri>`/prefixed names, literals (`i64` before `f64`), `[ … ]` blank
+  nodes. Array-valued properties serialize as comma-lists and read back as
+  arrays when the property def says `array`.
 - **OWL** — RDF/XML: `owl:Class`, `owl:DatatypeProperty`,
   `owl:ObjectProperty`, `onto:Action`, `onto:{Type}` instances and
   `onto:{LinkType}` links. `onto:*` annotations keep the format lossless.
@@ -80,7 +86,8 @@ payloads link to TitleCase seeded types (the TS merge leaves those dangling).
   apiNames; arrays JSON-encoded. Rows only carry columns the object defines
   (mirrors the TS, ragged by design). Export only.
 
-`import(store, format, payload, mode)` accepts `Native`, `JsonLd`, `Owl`;
+`import(store, format, payload, mode)` accepts `Native`, `JsonLd`, `Owl`,
+`Turtle`;
 `parse_native_lenient` (feature `repair`) repairs malformed JSON via
 `anyrepair` first.
 

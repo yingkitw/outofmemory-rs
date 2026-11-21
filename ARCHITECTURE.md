@@ -15,7 +15,7 @@ src/
   interchange/
     mod.rs          Format, Parsed, dispatch, local(), native JSON envelope
     jsonld.rs       to_json_ld / parse_json_ld
-    turtle.rs       to_turtle (export only)
+    turtle.rs       to_turtle / parse_turtle (hand-rolled Turtle-subset parser)
     owl.rs          to_owl_rdf / parse_owl_rdf (mini-DOM over quick-xml)
     csv.rs          to_instances_csv (export only)
   util.rs           now_iso() — ISO-8601 UTC without a datetime dep

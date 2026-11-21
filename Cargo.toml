@@ -1,10 +1,15 @@
 [package]
 name = "outofmemory"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Context engineering toolkit for LLM agents backed by a Palantir-style ontology (object types, link types, action types, instances) with JSON-LD/Turtle/OWL interchange, MCP tools, and token-budget context packing."
 license = "Apache-2.0"
 authors = ["Ying Kit WONG"]
+repository = "https://github.com/yingkitw/outofmemory-rs"
+homepage = "https://github.com/yingkitw/outofmemory-rs"
+documentation = "https://docs.rs/outofmemory"
+keywords = ["ontology", "context-engineering", "mcp", "json-ld", "rdf"]
+categories = ["data-structures", "parser-implementations"]
 
 [features]
 default = ["repair"]

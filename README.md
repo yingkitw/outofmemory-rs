@@ -23,7 +23,7 @@ cargo run --example pack_context -- "delayed shipments via Hamburg" 1200
 | Domain model | [`model`](src/model.rs) | `ObjectType` / `LinkType` / `ActionType` / `Obj` / `ObjectLink`, serde-compatible with the TS `src/types.ts` byte-for-byte |
 | Validated store | [`store`](src/store.rs) | In-memory `Store` with the API's rules: `apiName` uniqueness (409), endpoint type checks (400), duplicate links (409), FK-style cascades, `merge`/`replace` import, whole-state replace (undo backing) |
 | Context packing | [`context`](src/context.rs) | Schema + instance Markdown rendering, query relevance scoring, graph-neighbourhood expansion, greedy packing under a token budget |
-| Interchange | [`interchange`](src/interchange/) | Native JSON, JSON-LD, Turtle, OWL/RDF-XML, instances CSV — native→JSON-LD→native and native→OWL→native round-trips are lossless |
+| Interchange | [`interchange`](src/interchange/) | Native JSON, JSON-LD, Turtle, OWL/RDF-XML, instances CSV — native→JSON-LD→native, native→OWL→native and native→Turtle→native round-trips are lossless |
 | MCP tools | [`mcp`](src/mcp.rs) | The same 7 tools (`get_ontology`, `create_object_type`, `create_link_type`, `delete_object_type`, `list_instances`, `create_instance`, `link_instances`) over a stateless JSON-RPC handler — mount on stdio or HTTP |
 | AI generation | [`generate`](src/generate.rs) | The `/api/generate` prompt assembly (existing types injected so models extend, not redefine) + repair-tolerant output parsing into the native payload |
 | Seed data | [`seed`](src/seed.rs) | The workbench's deterministic supply-chain dataset: 9 types, 10 link types, 3 actions, 66 objects, ~89 links |
