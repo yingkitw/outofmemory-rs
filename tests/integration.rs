@@ -521,6 +521,89 @@ fn problems_reports_cardinality_violations() {
     );
 }
 
+// ---------- undo/redo ----------
+
+#[test]
+fn undo_redo_restores_snapshots() {
+    let mut store = Store::new();
+    assert!(!store.can_undo() && !store.can_redo());
+    assert!(!store.undo() && !store.redo());
+
+    let mk = |api: &str| ObjectType {
+        id: String::new(),
+        api_name: api.into(),
+        display_name: api.into(),
+        plural_display_name: String::new(),
+        description: String::new(),
+        domain: String::new(),
+        color: String::new(),
+        properties: vec![],
+    };
+
+    store.create_object_type(mk("A")).unwrap();
+    store.create_object_type(mk("B")).unwrap();
+    assert_eq!(store.state.object_types.len(), 2);
+
+    // each mutation is one step
+    assert!(store.undo());
+    assert_eq!(store.state.object_types.len(), 1);
+    assert!(store.can_redo());
+    assert!(store.redo());
+    assert_eq!(store.state.object_types.len(), 2);
+
+    // deleting B (cascade included) restores in one step
+    let b_id = store.object_type_by_api("B").unwrap().id.clone();
+    store.delete_object_type(&b_id).unwrap();
+    assert_eq!(store.state.object_types.len(), 1);
+    assert!(store.undo());
+    assert_eq!(store.state.object_types.len(), 2);
+
+    // a new mutation clears the redo stack
+    assert!(store.undo());
+    store.create_object_type(mk("C")).unwrap();
+    assert!(!store.can_redo());
+
+    // a failed write does NOT consume an undo step
+    assert_eq!(
+        store
+            .create_object_type(mk("A")) // apiName clash
+            .unwrap_err()
+            .kind,
+        ErrorKind::Conflict
+    );
+    assert!(store.undo());
+    assert_eq!(store.state.object_types.len(), 1); // back past C leaves only A
+}
+
+#[test]
+fn undo_covers_merge_and_replace() {
+    let mut store = seeded();
+    let before = serde_json::to_value(&store.state).unwrap();
+
+    // merge is one undo step
+    let mut incoming = State::default();
+    incoming.object_types.push(ObjectType {
+        id: "x".into(),
+        api_name: "X".into(),
+        display_name: "X".into(),
+        plural_display_name: "Xs".into(),
+        description: String::new(),
+        domain: String::new(),
+        color: String::new(),
+        properties: vec![],
+    });
+    store.merge(incoming);
+    assert!(store.object_type_by_api("X").is_some());
+    assert!(store.undo());
+    assert_eq!(serde_json::to_value(&store.state).unwrap(), before);
+
+    // replace too
+    store.import(State::default(), ImportMode::Replace);
+    assert!(store.state.object_types.is_empty());
+    assert!(store.undo());
+    assert_eq!(serde_json::to_value(&store.state).unwrap(), before);
+}
+
 // ---------- context engineering ----------
 
 #[test]

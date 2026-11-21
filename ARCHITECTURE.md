@@ -50,8 +50,10 @@ core exactly the way `mcp.rs` sits on it today.
 
 - **`State` is the interchange and undo unit.** `replace_all`/`merge`/
   `import` all take `State`; `Parsed { state, warnings }` is what every
-  importer produces. The MCP tools and REST routes in the TS app reduce to
-  `Store` method calls.
+  importer produces. Every mutator checkpoints a `State` snapshot after
+  validation (`undo()`/`redo()` restore it — bulk ops are one step), so the
+  workbench's undo model holds without a command pattern. The MCP tools and
+  REST routes in the TS app reduce to `Store` method calls.
 - **apiName is the foreign key across documents.** Merge resolution and the
   generated-payload path both rely on apiName → id lookups; case-insensitive
   fallback is deliberate (see `Store::merge` doc) because apiName casing

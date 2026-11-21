@@ -21,7 +21,7 @@ cargo run --example pack_context -- "delayed shipments via Hamburg" 1200
 | Capability | Module | What you get |
 | --- | --- | --- |
 | Domain model | [`model`](src/model.rs) | `ObjectType` / `LinkType` / `ActionType` / `Obj` / `ObjectLink`, serde-compatible with the TS `src/types.ts` byte-for-byte |
-| Validated store | [`store`](src/store.rs) | In-memory `Store` with the API's rules: `apiName` uniqueness (409), endpoint type checks (400), duplicate links (409), `ONE`-cardinality link checks (409), property constraints (`pattern`/`enumValues`/`unique`), FK-style cascades, `merge`/`replace` import, `problems()` lint, whole-state replace (undo backing) |
+| Validated store | [`store`](src/store.rs) | In-memory `Store` with the API's rules: `apiName` uniqueness (409), endpoint type checks (400), duplicate links (409), `ONE`-cardinality link checks (409), property constraints (`pattern`/`enumValues`/`unique`), FK-style cascades, `merge`/`replace` import, `problems()` lint, whole-state replace, snapshot undo/redo (`undo()`/`redo()` — one step per mutator call) |
 | Context packing | [`context`](src/context.rs) | Schema + instance Markdown rendering, query relevance scoring, graph-neighbourhood expansion, greedy packing under a token budget |
 | Interchange | [`interchange`](src/interchange/) | Native JSON, JSON-LD, Turtle, OWL/RDF-XML, instances CSV — native→JSON-LD→native, native→OWL→native and native→Turtle→native round-trips are lossless |
 | MCP tools | [`mcp`](src/mcp.rs) | The same 7 tools (`get_ontology`, `create_object_type`, `create_link_type`, `delete_object_type`, `list_instances`, `create_instance`, `link_instances`) over a stateless JSON-RPC handler — mount on stdio or HTTP |

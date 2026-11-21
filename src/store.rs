@@ -70,6 +70,8 @@ pub enum ImportMode {
 #[derive(Debug, Clone, Default)]
 pub struct Store {
     pub state: State,
+    undo_stack: Vec<State>,
+    redo_stack: Vec<State>,
 }
 
 impl Store {
@@ -78,7 +80,48 @@ impl Store {
     }
 
     pub fn from_state(state: State) -> Self {
-        Store { state }
+        Store {
+            state,
+            ..Default::default()
+        }
+    }
+
+    // ---------- undo/redo (whole-State snapshots, workbench-style) ----------
+
+    /// Push a snapshot for undo; clears the redo stack. Every mutator calls
+    /// this after validation, so each successful write is one undo step —
+    /// including `import`/`merge`/`replace_all`.
+    pub fn checkpoint(&mut self) {
+        self.undo_stack.push(self.state.clone());
+        self.redo_stack.clear();
+    }
+
+    pub fn can_undo(&self) -> bool {
+        !self.undo_stack.is_empty()
+    }
+
+    pub fn can_redo(&self) -> bool {
+        !self.redo_stack.is_empty()
+    }
+
+    /// Restore the previous snapshot. Returns `false` when nothing is left.
+    pub fn undo(&mut self) -> bool {
+        let Some(prev) = self.undo_stack.pop() else {
+            return false;
+        };
+        self.redo_stack
+            .push(std::mem::replace(&mut self.state, prev));
+        true
+    }
+
+    /// Re-apply the state undone most recently.
+    pub fn redo(&mut self) -> bool {
+        let Some(next) = self.redo_stack.pop() else {
+            return false;
+        };
+        self.undo_stack
+            .push(std::mem::replace(&mut self.state, next));
+        true
     }
 
     // ---------- lookups ----------
@@ -167,6 +210,7 @@ impl Store {
         if t.id.is_empty() {
             t.id = uuid::Uuid::new_v4().to_string();
         }
+        self.checkpoint();
         self.state.object_types.push(t);
         Ok(self.state.object_types.last().unwrap())
     }
@@ -179,12 +223,16 @@ impl Store {
         {
             return Err(Error::clash(format!("apiName \"{api}\" already exists")));
         }
+        if self.object_type(id).is_none() {
+            return Err(Error::gone("object type not found"));
+        }
+        self.checkpoint();
         let t = self
             .state
             .object_types
             .iter_mut()
             .find(|t| t.id == id)
-            .ok_or_else(|| Error::gone("object type not found"))?;
+            .unwrap();
         if let Some(v) = patch.api_name {
             t.api_name = v;
         }
@@ -212,11 +260,11 @@ impl Store {
     /// Cascades: link types touching it, action types on it, instances of it,
     /// instance links of those (and of the removed link types), layout row.
     pub fn delete_object_type(&mut self, id: &str) -> Result<()> {
-        let before = self.state.object_types.len();
-        self.state.object_types.retain(|t| t.id != id);
-        if self.state.object_types.len() == before {
+        if self.object_type(id).is_none() {
             return Err(Error::gone("object type not found"));
         }
+        self.checkpoint();
+        self.state.object_types.retain(|t| t.id != id);
         self.state
             .link_types
             .retain(|l| l.source_type_id != id && l.target_type_id != id);
@@ -267,6 +315,7 @@ impl Store {
         if l.id.is_empty() {
             l.id = uuid::Uuid::new_v4().to_string();
         }
+        self.checkpoint();
         self.state.link_types.push(l);
         Ok(self.state.link_types.last().unwrap())
     }
@@ -278,12 +327,16 @@ impl Store {
         {
             return Err(Error::clash(format!("apiName \"{api}\" already exists")));
         }
+        if self.link_type(id).is_none() {
+            return Err(Error::gone("link type not found"));
+        }
+        self.checkpoint();
         let l = self
             .state
             .link_types
             .iter_mut()
             .find(|l| l.id == id)
-            .ok_or_else(|| Error::gone("link type not found"))?;
+            .unwrap();
         if let Some(v) = patch.api_name {
             l.api_name = v;
         }
@@ -304,11 +357,11 @@ impl Store {
 
     /// Cascades to instance links of this link type.
     pub fn delete_link_type(&mut self, id: &str) -> Result<()> {
-        let before = self.state.link_types.len();
-        self.state.link_types.retain(|l| l.id != id);
-        if self.state.link_types.len() == before {
+        if self.link_type(id).is_none() {
             return Err(Error::gone("link type not found"));
         }
+        self.checkpoint();
+        self.state.link_types.retain(|l| l.id != id);
         self.state.object_links.retain(|l| l.link_type_id != id);
         Ok(())
     }
@@ -338,16 +391,17 @@ impl Store {
         if a.id.is_empty() {
             a.id = uuid::Uuid::new_v4().to_string();
         }
+        self.checkpoint();
         self.state.action_types.push(a);
         Ok(self.state.action_types.last().unwrap())
     }
 
     pub fn delete_action_type(&mut self, id: &str) -> Result<()> {
-        let before = self.state.action_types.len();
-        self.state.action_types.retain(|a| a.id != id);
-        if self.state.action_types.len() == before {
+        if !self.state.action_types.iter().any(|a| a.id == id) {
             return Err(Error::gone("action type not found"));
         }
+        self.checkpoint();
+        self.state.action_types.retain(|a| a.id != id);
         Ok(())
     }
 
@@ -503,17 +557,18 @@ impl Store {
         if o.created_at.is_empty() {
             o.created_at = crate::util::now_iso();
         }
+        self.checkpoint();
         self.state.objects.push(o);
         Ok(self.state.objects.last().unwrap())
     }
 
     /// Cascades to instance links where the object is source or target.
     pub fn delete_object(&mut self, id: &str) -> Result<()> {
-        let before = self.state.objects.len();
-        self.state.objects.retain(|o| o.id != id);
-        if self.state.objects.len() == before {
+        if self.object(id).is_none() {
             return Err(Error::gone("object not found"));
         }
+        self.checkpoint();
+        self.state.objects.retain(|o| o.id != id);
         self.state
             .object_links
             .retain(|l| l.source_object_id != id && l.target_object_id != id);
@@ -574,16 +629,17 @@ impl Store {
         if l.id.is_empty() {
             l.id = uuid::Uuid::new_v4().to_string();
         }
+        self.checkpoint();
         self.state.object_links.push(l);
         Ok(self.state.object_links.last().unwrap())
     }
 
     pub fn delete_object_link(&mut self, id: &str) -> Result<()> {
-        let before = self.state.object_links.len();
-        self.state.object_links.retain(|l| l.id != id);
-        if self.state.object_links.len() == before {
+        if self.object_link(id).is_none() {
             return Err(Error::gone("object link not found"));
         }
+        self.checkpoint();
+        self.state.object_links.retain(|l| l.id != id);
         Ok(())
     }
 
@@ -591,6 +647,10 @@ impl Store {
 
     /// Upsert canvas positions keyed by type id (`PUT /api/layout`).
     pub fn set_layout(&mut self, positions: Vec<LayoutEntry>) {
+        if positions.is_empty() {
+            return;
+        }
+        self.checkpoint();
         for p in positions {
             if let Some(e) = self
                 .state
@@ -610,6 +670,7 @@ impl Store {
     /// `PUT /api/state` — atomic whole-ontology replace.
     pub fn replace_all(&mut self, state: State) -> Summary {
         let summary = state.summary();
+        self.checkpoint();
         self.state = state;
         summary
     }
@@ -620,6 +681,7 @@ impl Store {
     /// resolved to existing ids, which is how the AI-generation payload links
     /// to the current ontology.
     pub fn merge(&mut self, incoming: State) -> Summary {
+        self.checkpoint();
         // Pass 1 — object types first, so apiName → id resolution exists for
         // everything that references them.
         for t in &incoming.object_types {

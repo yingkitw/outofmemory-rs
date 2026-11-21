@@ -16,10 +16,10 @@
 - [x] Turtle import (`parse_turtle`) — Turtle round-trip is lossless (export carries the full `onto:` annotation set)
 - [x] Property-level constraints (`pattern`/`enumValues`/`unique` on `PropertyDef`) — enforced in `create_object`, linted by `Store::problems()`/`validate`, round-trip through all RDF formats
 - [x] Link cardinality enforcement at instance-link write time (`ONE` ends → 409; linted by `problems()`)
+- [x] Undo/redo stack over `State` snapshots — every mutator checkpoints post-validation; `undo()`/`redo()`/`can_undo()`/`can_redo()`; bulk ops = one step
 
 ## Next
 
-- [ ] Undo/redo stack over `State` snapshots (`put_state` already backs it)
 - [ ] `PackedContext` → citations: per-object source ids already tracked; add a machine-readable `context.json` sidecar option
 - [ ] Query scoring: IDF weighting + property-name matches (currently title/property-value term hits)
 - [ ] Optional `tiktoken`-style counter behind a feature flag; `estimate_tokens` stays the default

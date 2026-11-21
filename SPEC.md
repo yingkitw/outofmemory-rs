@@ -76,6 +76,12 @@ payloads link to TitleCase seeded types (the TS merge leaves those dangling).
 
 `replace_all(state)` — atomic whole-state replace; returns a `Summary` of counts.
 
+**Undo/redo.** Every successful mutator checkpoints the whole `State` after
+validation and before writing, so each write — including `merge`/`replace_all`/
+`import` — is exactly one undo step. Failed mutations leave history untouched.
+`undo()`/`redo()` swap snapshots (`false` on empty stack); a new mutation
+clears the redo stack; `can_undo()`/`can_redo()` report depth.
+
 ## Interchange
 
 `Format::{Native, JsonLd, Turtle, Owl, Csv}`; `Format::parse` also accepts
