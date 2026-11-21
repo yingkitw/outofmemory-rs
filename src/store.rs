@@ -1,10 +1,10 @@
 //! In-memory ontology store with the same validation and cascade semantics as
 //! the TS API (`server/app.ts` + `server/db.ts` FK rules):
 //!
-//! - `apiName` uniqueness → [`ErrorKind::Conflict`]
+//! - `apiName` uniqueness → [`crate::error::ErrorKind::Conflict`]
 //! - link endpoints must reference existing object types; instance links must
 //!   match the link type's endpoint types; duplicate (linkType, source,
-//!   target) → [`ErrorKind::Conflict`]
+//!   target) → [`crate::error::ErrorKind::Conflict`]
 //! - deleting an object type cascades to its link types, action types,
 //!   instances, instance links and layout position; deleting a link type or an
 //!   object cascades to the instance links that reference it
