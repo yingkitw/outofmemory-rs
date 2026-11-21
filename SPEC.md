@@ -12,7 +12,8 @@ All types serialize with the same camelCase field names as `src/types.ts`.
 DataType      = "string" | "integer" | "decimal" | "boolean" | "date" | "timestamp"
 Cardinality   = "ONE" | "MANY"
 
-PropertyDef   { apiName, displayName, dataType, required = false, array = false }
+PropertyDef   { apiName, displayName, dataType, required = false, array = false,
+                pattern?, enumValues?, unique = false }   // [ext] not in the TS model
 ObjectType    { id, apiName, displayName, pluralDisplayName, description, domain, color, properties[] }
 LinkType      { id, apiName, displayName, description, sourceTypeId, targetTypeId,
                 sourceCardinality, targetCardinality }
@@ -34,15 +35,25 @@ would have returned:
 
 | `ErrorKind` | Status | Raised when |
 | --- | --- | --- |
-| `BadRequest` | 400 | missing required field, invalid reference, type mismatch on link endpoints |
+| `BadRequest` | 400 | missing required field, invalid reference, type mismatch on link endpoints, `pattern`/`enumValues` violation |
 | `NotFound` | 404 | update/delete of a missing entity |
-| `Conflict` | 409 | duplicate apiName, duplicate `(linkType, source, target)` link |
+| `Conflict` | 409 | duplicate apiName, duplicate `(linkType, source, target)` link, `unique` violation |
 
 ## Store semantics (`store.rs`)
 
 Creation defaults mirror the API: `pluralDisplayName` = `displayName + "s"`,
 `domain` = `"General"`, `color` = `"#f0b35c"`, ids are UUIDv4, `createdAt` is
 ISO-8601 UTC. `apiName`/`displayName`/`title` are trimmed and required.
+
+Property constraints `[ext]` — `create_object` checks the type's property
+defs: a `pattern` (regex-lite syntax) every scalar must match, `enumValues`
+the value must be one of, and `unique` which no two objects of the type may
+share. Violations return `BadRequest` (`pattern`/`enumValues`) or `Conflict`
+(`unique`). `import`/`merge` bypass write-time checks by design; the same
+rules are reported non-fatally by `Store::problems()` (also the backend of
+`outofmemory validate`). Constraints serialize on RDF property nodes as
+`onto:pattern`, `onto:enumValues`, `onto:unique` and round-trip losslessly.
+They do not apply to action parameters.
 
 Cascades (the DB's `ON DELETE CASCADE` rules):
 

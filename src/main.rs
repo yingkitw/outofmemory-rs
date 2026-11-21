@@ -151,22 +151,7 @@ fn run() -> Result<i32, String> {
             };
             let store = Store::from_state(parsed.state);
             let s = &store.state;
-            let mut problems: Vec<String> = vec![];
-            for l in &s.link_types {
-                if store.object_type(&l.source_type_id).is_none()
-                    || store.object_type(&l.target_type_id).is_none()
-                {
-                    problems.push(format!("link type {} has unresolved endpoints", l.api_name));
-                }
-            }
-            for l in &s.object_links {
-                if store.link_type(&l.link_type_id).is_none()
-                    || store.object(&l.source_object_id).is_none()
-                    || store.object(&l.target_object_id).is_none()
-                {
-                    problems.push(format!("object link {} is dangling", l.id));
-                }
-            }
+            let mut problems = store.problems();
             for w in &parsed.warnings {
                 problems.push(format!("warning: {w}"));
             }

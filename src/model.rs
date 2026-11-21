@@ -84,6 +84,10 @@ impl Cardinality {
     }
 }
 
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
 /// Typed property declared on an [`ObjectType`] (or a parameter on an [`ActionType`]).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -95,6 +99,15 @@ pub struct PropertyDef {
     pub required: bool,
     #[serde(default)]
     pub array: bool,
+    /// Regex every scalar value must match (extension — not in the TS model).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pattern: Option<String>,
+    /// Allowed values, when set (extension — not in the TS model).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enum_values: Option<Vec<String>>,
+    /// No two objects of the type may share a value (extension).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub unique: bool,
 }
 
 /// An entity class — the Foundry "object type".
@@ -287,6 +300,9 @@ mod tests {
                 data_type: DataType::Integer,
                 required: true,
                 array: false,
+                pattern: None,
+                enum_values: None,
+                unique: false,
             }],
         };
         let v = serde_json::to_value(&t).unwrap();

@@ -169,6 +169,141 @@ fn merge_adds_missing_replace_swaps_all() {
     assert!(store.state.object_types.is_empty());
 }
 
+// ---------- property constraints ----------
+
+fn constrained_store() -> Store {
+    let mut store = Store::new();
+    store
+        .create_object_type(ObjectType {
+            id: String::new(),
+            api_name: "Vessel".into(),
+            display_name: "Vessel".into(),
+            plural_display_name: String::new(),
+            description: String::new(),
+            domain: String::new(),
+            color: String::new(),
+            properties: vec![
+                PropertyDef {
+                    api_name: "imo".into(),
+                    display_name: "IMO".into(),
+                    data_type: DataType::String,
+                    required: false,
+                    array: false,
+                    pattern: Some(r"^IMO\d{7}$".into()),
+                    enum_values: None,
+                    unique: true,
+                },
+                PropertyDef {
+                    api_name: "flag".into(),
+                    display_name: "Flag".into(),
+                    data_type: DataType::String,
+                    required: false,
+                    array: false,
+                    pattern: None,
+                    enum_values: Some(vec!["Panama".into(), "Liberia".into()]),
+                    unique: false,
+                },
+            ],
+        })
+        .unwrap();
+    store
+}
+
+#[test]
+fn property_constraints_enforced() {
+    let mut store = constrained_store();
+    let type_id = store.state.object_types[0].id.clone();
+    let mk = |title: &str, props: serde_json::Value| Obj {
+        id: String::new(),
+        type_id: type_id.clone(),
+        title: title.into(),
+        properties: serde_json::from_value(props).unwrap(),
+        created_at: String::new(),
+    };
+
+    // pattern violation → 400
+    let bad = mk("A", serde_json::json!({"imo": "X9"}));
+    assert_eq!(
+        store.create_object(bad).unwrap_err().kind,
+        ErrorKind::BadRequest
+    );
+    // enum violation → 400
+    let bad2 = mk("B", serde_json::json!({"flag": "Mars"}));
+    assert_eq!(
+        store.create_object(bad2).unwrap_err().kind,
+        ErrorKind::BadRequest
+    );
+    // valid object passes
+    store
+        .create_object(mk(
+            "C",
+            serde_json::json!({"imo": "IMO9074729", "flag": "Panama"}),
+        ))
+        .unwrap();
+    // unique duplicate → 409
+    let dup = mk("D", serde_json::json!({"imo": "IMO9074729"}));
+    assert_eq!(
+        store.create_object(dup).unwrap_err().kind,
+        ErrorKind::Conflict
+    );
+}
+
+#[test]
+fn problems_reports_constraint_violations() {
+    let mut store = constrained_store();
+    let type_id = store.state.object_types[0].id.clone();
+    // import bypasses write-time checks — the lint catches them instead
+    store.import(
+        State {
+            objects: vec![
+                Obj {
+                    id: "o1".into(),
+                    type_id: type_id.clone(),
+                    title: "One".into(),
+                    properties: serde_json::from_value(
+                        serde_json::json!({"imo": "BAD", "flag": "Mars"}),
+                    )
+                    .unwrap(),
+                    created_at: String::new(),
+                },
+                Obj {
+                    id: "o2".into(),
+                    type_id: type_id.clone(),
+                    title: "Two".into(),
+                    properties: serde_json::from_value(serde_json::json!({"imo": "BAD2"})).unwrap(),
+                    created_at: String::new(),
+                },
+            ],
+            ..Default::default()
+        },
+        ImportMode::Merge,
+    );
+    let problems = store.problems();
+    assert!(
+        problems.iter().any(|p| p.contains("pattern")),
+        "{problems:?}"
+    );
+    assert!(problems.iter().any(|p| p.contains("enum")));
+}
+
+#[test]
+fn property_constraints_round_trip() {
+    let store = constrained_store();
+    let check = |parsed: Parsed| {
+        let mut fresh = Store::new();
+        fresh.import(parsed.state, ImportMode::Replace);
+        assert_eq!(
+            serde_json::to_value(&fresh.state).unwrap(),
+            serde_json::to_value(&store.state).unwrap(),
+            "constraints must survive interchange"
+        );
+    };
+    check(parse_json_ld(&to_json_ld(&store)));
+    check(parse_turtle(&to_turtle(&store)).unwrap());
+    check(parse_owl_rdf(&to_owl_rdf(&store)).unwrap());
+    check(parse_native(&to_native_json(&store)).unwrap());
+}
+
 // ---------- context engineering ----------
 
 #[test]

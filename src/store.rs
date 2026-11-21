@@ -353,12 +353,114 @@ impl Store {
 
     // ---------- objects (instances) ----------
 
+    /// `pattern`/`enumValues`/`unique` violations for an instance against its
+    /// type's property defs — `(rule, message)` pairs; `unique` maps to
+    /// Conflict at write time, the rest to BadRequest.
+    fn property_violations(&self, o: &Obj) -> Vec<(&'static str, String)> {
+        let Some(ty) = self.object_type(&o.type_id) else {
+            return vec![];
+        };
+        let scalar = |v: &serde_json::Value| -> String {
+            v.as_str()
+                .map(str::to_string)
+                .unwrap_or_else(|| v.to_string())
+        };
+        let mut out = vec![];
+        for p in &ty.properties {
+            let Some(v) = o.properties.get(&p.api_name) else {
+                continue;
+            };
+            let scalars: Vec<String> = match v {
+                serde_json::Value::Array(a) => a.iter().map(scalar).collect(),
+                other => vec![scalar(other)],
+            };
+            if let Some(pat) = &p.pattern {
+                match regex_lite::Regex::new(pat) {
+                    Ok(re) => {
+                        for s in &scalars {
+                            if !re.is_match(s) {
+                                out.push((
+                                    "pattern",
+                                    format!(
+                                        "property '{}' value '{s}' violates pattern /{pat}/",
+                                        p.api_name
+                                    ),
+                                ));
+                            }
+                        }
+                    }
+                    Err(_) => out.push((
+                        "pattern",
+                        format!("property '{}' has an invalid pattern", p.api_name),
+                    )),
+                }
+            }
+            if let Some(vals) = &p.enum_values {
+                for s in &scalars {
+                    if !vals.contains(s) {
+                        out.push((
+                            "enum",
+                            format!(
+                                "property '{}' value '{s}' violates enum {vals:?}",
+                                p.api_name
+                            ),
+                        ));
+                    }
+                }
+            }
+            if p.unique
+                && self
+                    .objects_of_type(&ty.id)
+                    .any(|x| x.id != o.id && x.properties.get(&p.api_name) == Some(v))
+            {
+                out.push((
+                    "unique",
+                    format!("property '{}' value violates unique", p.api_name),
+                ));
+            }
+        }
+        out
+    }
+
+    /// Non-fatal problems in the current state — referential integrity plus
+    /// property-constraint violations. Backs `outofmemory validate`.
+    pub fn problems(&self) -> Vec<String> {
+        let mut problems = vec![];
+        for l in &self.state.link_types {
+            if self.object_type(&l.source_type_id).is_none()
+                || self.object_type(&l.target_type_id).is_none()
+            {
+                problems.push(format!("link type {} has unresolved endpoints", l.api_name));
+            }
+        }
+        for l in &self.state.object_links {
+            if self.link_type(&l.link_type_id).is_none()
+                || self.object(&l.source_object_id).is_none()
+                || self.object(&l.target_object_id).is_none()
+            {
+                problems.push(format!("object link {} is dangling", l.id));
+            }
+        }
+        for o in &self.state.objects {
+            for (_, msg) in self.property_violations(o) {
+                problems.push(format!("object {}: {msg}", o.id));
+            }
+        }
+        problems
+    }
+
     pub fn create_object(&mut self, mut o: Obj) -> Result<&Obj> {
         if o.title.trim().is_empty() {
             return Err(Error::bad("title is required"));
         }
         if self.object_type(&o.type_id).is_none() {
             return Err(Error::bad("typeId must reference an existing object type"));
+        }
+        if let Some((rule, msg)) = self.property_violations(&o).into_iter().next() {
+            return Err(match rule {
+                "unique" => Error::clash(msg),
+                _ => Error::bad(msg),
+            });
         }
         o.title = o.title.trim().to_string();
         if o.id.is_empty() {

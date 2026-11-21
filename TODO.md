@@ -14,10 +14,10 @@
 - [x] CLI: seed/export/import/validate/context/mcp
 - [x] Integration tests + example; `cargo test`/`clippy` green
 - [x] Turtle import (`parse_turtle`) — Turtle round-trip is lossless (export carries the full `onto:` annotation set)
+- [x] Property-level constraints (`pattern`/`enumValues`/`unique` on `PropertyDef`) — enforced in `create_object`, linted by `Store::problems()`/`validate`, round-trip through all RDF formats
 
 ## Next
 
-- [ ] Property-level constraints (regex/enum/uniqueness) with instance validation — from the workbench roadmap
 - [ ] Link cardinality enforcement at instance-link write time (e.g. reject a second `CURRENT_PORT` for a vessel)
 - [ ] Undo/redo stack over `State` snapshots (`put_state` already backs it)
 - [ ] `PackedContext` → citations: per-object source ids already tracked; add a machine-readable `context.json` sidecar option
@@ -36,6 +36,7 @@
 
 ## Known divergences from the TS app
 
+- `PropertyDef` carries optional `pattern`/`enumValues`/`unique` constraint fields (extension; enforced at `create_object`, linted by `Store::problems`).
 - `Store::merge` resolves apiName endpoints case-insensitively (TS leaves `CONTAINER`→`Container` dangling).
 - `generate::up` uses `slugify` (handles spaces/camelCase) rather than plain `toUpperCase`.
 - CSV rows omit undefined property columns like the TS (ragged by design).

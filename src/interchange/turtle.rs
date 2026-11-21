@@ -72,16 +72,37 @@ pub fn to_turtle(store: &Store) -> String {
             String::new(),
         ]);
         for p in &t.properties {
-            lines.extend([
-                format!("onto:{}.{} a rdf:Property ;", t.api_name, p.api_name),
-                format!("  rdfs:label \"{}\" ;", ttl_escape(&p.display_name)),
-                format!("  rdfs:domain onto:{} ;", t.api_name),
-                format!("  rdfs:range {} ;", p.data_type.xsd()),
-                format!("  onto:apiName \"{}\" ;", ttl_escape(&p.api_name)),
-                format!("  onto:required {} ;", p.required),
-                format!("  onto:array {} .", p.array),
-                String::new(),
-            ]);
+            let mut preds = vec![
+                format!("  rdfs:label \"{}\"", ttl_escape(&p.display_name)),
+                format!("  rdfs:domain onto:{}", t.api_name),
+                format!("  rdfs:range {}", p.data_type.xsd()),
+                format!("  onto:apiName \"{}\"", ttl_escape(&p.api_name)),
+                format!("  onto:required {}", p.required),
+                format!("  onto:array {}", p.array),
+            ];
+            if let Some(pat) = &p.pattern {
+                preds.push(format!("  onto:pattern \"{}\"", ttl_escape(pat)));
+            }
+            if let Some(vals) = &p.enum_values
+                && !vals.is_empty()
+            {
+                let list = vals
+                    .iter()
+                    .map(|v| format!("\"{}\"", ttl_escape(v)))
+                    .collect::<Vec<_>>()
+                    .join(" , ");
+                preds.push(format!("  onto:enumValues {list}"));
+            }
+            if p.unique {
+                preds.push("  onto:unique true".into());
+            }
+            lines.push(format!(
+                "onto:{}.{} a rdf:Property ;\n{} .",
+                t.api_name,
+                p.api_name,
+                preds.join(" ;\n")
+            ));
+            lines.push(String::new());
         }
     }
 
@@ -688,6 +709,18 @@ pub fn parse_turtle(text: &str) -> Result<Parsed> {
                         .unwrap_or(DataType::String),
                     required: bool_lit(first(pp, "onto:required")),
                     array: bool_lit(first(pp, "onto:array")),
+                    pattern: {
+                        let s = str_lit(first(pp, "onto:pattern"));
+                        if s.is_empty() { None } else { Some(s) }
+                    },
+                    enum_values: pp.get("onto:enumValues").map(|terms| {
+                        terms
+                            .iter()
+                            .map(|t| str_lit(Some(t)))
+                            .filter(|s| !s.is_empty())
+                            .collect()
+                    }),
+                    unique: bool_lit(first(pp, "onto:unique")),
                 }
             })
             .collect();
@@ -791,6 +824,9 @@ pub fn parse_turtle(text: &str) -> Result<Parsed> {
                                 .unwrap_or(DataType::String),
                                 required: bool_lit(b.get("onto:required").and_then(|v| v.first())),
                                 array: false,
+                                pattern: None,
+                                enum_values: None,
+                                unique: false,
                             }),
                             _ => None,
                         })
@@ -838,7 +874,7 @@ pub fn parse_turtle(text: &str) -> Result<Parsed> {
     let mut objects: Vec<Obj> = vec![];
     let mut object_links: Vec<ObjectLink> = vec![];
 
-    const RESERVED_ONTO: [&str; 20] = [
+    const RESERVED_ONTO: [&str; 23] = [
         "apiName",
         "objectTypeId",
         "objectId",
@@ -859,6 +895,9 @@ pub fn parse_turtle(text: &str) -> Result<Parsed> {
         "parameters",
         "source",
         "target",
+        "pattern",
+        "enumValues",
+        "unique",
     ];
 
     let term_value = |t: &Term| -> Value {

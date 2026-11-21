@@ -80,6 +80,24 @@ pub fn to_owl_rdf(store: &Store) -> String {
                 format!("    <onto:array>{}</onto:array>", p.array),
                 "  </owl:DatatypeProperty>".to_string(),
             ]);
+            if let Some(pat) = &p.pattern {
+                // insert before the closing tag
+                let close = out.pop().unwrap_or_default();
+                out.push(format!("    <onto:pattern>{}</onto:pattern>", xml(pat)));
+                out.push(close);
+            }
+            if let Some(vals) = &p.enum_values {
+                let close = out.pop().unwrap_or_default();
+                for v in vals {
+                    out.push(format!("    <onto:enumValues>{}</onto:enumValues>", xml(v)));
+                }
+                out.push(close);
+            }
+            if p.unique {
+                let close = out.pop().unwrap_or_default();
+                out.push("    <onto:unique>true</onto:unique>".to_string());
+                out.push(close);
+            }
         }
     }
 
@@ -455,6 +473,18 @@ pub fn parse_owl_rdf(xml_text: &str) -> Result<Parsed> {
                     data_type: data_type_of(&resource(child(p, "rdfs:range"))),
                     required: text_of(child(p, "onto:required")) == "true",
                     array: text_of(child(p, "onto:array")) == "true",
+                    pattern: {
+                        let s = text_of(child(p, "onto:pattern"));
+                        if s.is_empty() { None } else { Some(s) }
+                    },
+                    enum_values: {
+                        let vals: Vec<String> = kids(p, "onto:enumValues")
+                            .iter()
+                            .map(|e| text_of(Some(e)))
+                            .collect();
+                        if vals.is_empty() { None } else { Some(vals) }
+                    },
+                    unique: text_of(child(p, "onto:unique")) == "true",
                 }
             })
             .collect();
@@ -530,6 +560,9 @@ pub fn parse_owl_rdf(xml_text: &str) -> Result<Parsed> {
                             data_type: data_type_of(&resource(child(p, "rdfs:range"))),
                             required: text_of(child(p, "onto:required")) == "true",
                             array: false,
+                            pattern: None,
+                            enum_values: None,
+                            unique: false,
                         }
                     })
                     .collect(),

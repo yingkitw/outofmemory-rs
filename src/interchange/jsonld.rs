@@ -41,7 +41,7 @@ pub fn to_json_ld(store: &Store) -> Value {
             "onto:color": t.color,
         }));
         for p in &t.properties {
-            graph.push(json!({
+            let mut node = json!({
                 "@id": format!("{ONTO_NS}{}.{}", t.api_name, p.api_name),
                 "@type": "rdf:Property",
                 "rdfs:label": p.display_name,
@@ -51,7 +51,17 @@ pub fn to_json_ld(store: &Store) -> Value {
                 "onto:dataType": p.data_type.as_str(),
                 "onto:required": p.required,
                 "onto:array": p.array,
-            }));
+            });
+            if let Some(pat) = &p.pattern {
+                node["onto:pattern"] = json!(pat);
+            }
+            if let Some(vals) = &p.enum_values {
+                node["onto:enumValues"] = json!(vals);
+            }
+            if p.unique {
+                node["onto:unique"] = json!(true);
+            }
+            graph.push(node);
         }
     }
 
@@ -280,6 +290,20 @@ pub fn parse_json_ld(doc: &Value) -> Parsed {
                         .get("onto:array")
                         .and_then(Value::as_bool)
                         .unwrap_or(false),
+                    pattern: p
+                        .get("onto:pattern")
+                        .and_then(Value::as_str)
+                        .map(str::to_string),
+                    enum_values: p.get("onto:enumValues").and_then(Value::as_array).map(|a| {
+                        a.iter()
+                            .filter_map(Value::as_str)
+                            .map(str::to_string)
+                            .collect()
+                    }),
+                    unique: p
+                        .get("onto:unique")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false),
                 }
             })
             .collect();
@@ -386,6 +410,9 @@ pub fn parse_json_ld(doc: &Value) -> Parsed {
                                 .and_then(Value::as_bool)
                                 .unwrap_or(false),
                             array: false,
+                            pattern: None,
+                            enum_values: None,
+                            unique: false,
                         })
                         .collect()
                 })
@@ -435,7 +462,7 @@ pub fn parse_json_ld(doc: &Value) -> Parsed {
     let mut objects: Vec<Obj> = vec![];
     let mut object_links: Vec<ObjectLink> = vec![];
 
-    const RESERVED_ONTO: [&str; 8] = [
+    const RESERVED_ONTO: [&str; 11] = [
         "apiName",
         "objectId",
         "domain",
@@ -444,6 +471,9 @@ pub fn parse_json_ld(doc: &Value) -> Parsed {
         "required",
         "array",
         "createdAt",
+        "pattern",
+        "enumValues",
+        "unique",
     ];
 
     for node in &instance_nodes {

@@ -67,6 +67,9 @@ fn prop(api: &str, display: &str, data_type: DataType, required: bool) -> Proper
         data_type,
         required,
         array: false,
+        pattern: None,
+        enum_values: None,
+        unique: false,
     }
 }
 
