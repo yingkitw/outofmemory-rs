@@ -1,0 +1,18 @@
+[package]
+name = "outofmemory"
+version = "0.1.0"
+edition = "2024"
+description = "Context engineering toolkit for LLM agents backed by a Palantir-style ontology (object types, link types, action types, instances) with JSON-LD/Turtle/OWL interchange, MCP tools, and token-budget context packing."
+license = "Apache-2.0"
+authors = ["Ying Kit WONG"]
+
+[features]
+default = ["repair"]
+repair = ["dep:anyrepair"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+quick-xml = "0.36"
+anyrepair = { version = "0.2.12", optional = true }
